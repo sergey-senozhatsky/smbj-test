@@ -123,7 +123,7 @@ class SMBTEST {
 		return 0;
 	}
 
-	public int __conn()
+	public int __login()
 	{
 		try {
 			this.connection = client.connect(SERVER_ADDRESS);
@@ -149,6 +149,17 @@ class SMBTEST {
 		} catch (IOException e) {
 			e.printStackTrace();
 			return -1;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return -1;
+		}
+		return 0;
+	}
+
+	public int __logoff()
+	{
+		try {
+			this.session.logoff();
 		} catch (Exception e) {
 			e.printStackTrace();
 			return -1;
@@ -194,8 +205,8 @@ class SMBTEST {
 						length);
 				os.write(buffer, 0, length);
 			}
-			os.close();
 			is.close();
+			os.close();
 		} catch (Exception e) {
 			e.printStackTrace();
 			return -1;
@@ -251,11 +262,12 @@ public class App
 
 		if (st.__init_smb311_config() != 0)
 			return;
-		if (st.__conn() != 0)
+		if (st.__login() != 0)
 			return;
 		if (st.__read() != 0)
 			return;
 		if (st.__write() != 0)
 			return;
+		st.__logoff();
 	}
 }
