@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.security.Provider;
 import com.hierynomus.smbj.SmbConfig;
 import com.hierynomus.smbj.SMBClient;
@@ -37,37 +38,44 @@ import org.bouncycastle.crypto.Digest;
 import com.hierynomus.mssmb2.SMB2GlobalCapability;
 
 class SMBTEST {
-	static String SERVER_ADDRESS;
-	static String DOMAIN = "";
-	static String USERNAME;
-	static String PASSWORD;
-	static String SHARE_NAME;
-	static String LOCAL_PATH;
-	static String REMOTE_RFILE_NAME;
-	static String REMOTE_WFILE_NAME;
-	static String LOCAL_FILE_NAME;
+	static final String SERVER		= "SERVER";
+	static final String DOMAIN		= "DOMAIN";
+	static final String USER_NAME		= "USER_NAME";
+	static final String PASSWORD		= "PASSWORD";
+	static final String SHARE_NAME		= "SHARE_NAME";
+	static final String REMOTE_RFILE	= "REMOTE_RFILE";
+	static final String REMOTE_WFILE	= "REMOTE_WFILE";
+	static final String LOCAL_RWFILE	= "LOCAL_RWFILE";
+	static final String SMB_VERS		= "SMB_VERS";
+	static final String BUFFER_SIZE		= "BUFFER_SIZE";
+
 	static Connection connection;
 	static SMBClient client;
 	static Session session;
+	static Map<String, String> opts;
 
-	SMBTEST()
+	SMBTEST(String[] args)
 	{
-		SERVER_ADDRESS = "xxx.xxx.xxx.xxx";
-		String DOMAIN = "";
-		USERNAME = "xx";
-		PASSWORD = "xx";
-		SHARE_NAME = "xx";
+		opts = new HashMap<>();
 
-		LOCAL_PATH = "/xx/";
-		REMOTE_RFILE_NAME = "xx";
-		REMOTE_WFILE_NAME = "xx";
-		LOCAL_FILE_NAME = "xx";
+		for (String arg : args) {
+			if (arg.contains("=")) {
+				String k = arg.substring(0, arg.indexOf('='));
+				String v = arg.substring(arg.indexOf('=') + 1);
+
+				System.out.printf("Processing %s = %s\n",
+						  k, v);
+				opts.put(k, v);
+			}
+		}
 	}
 
-	public int __init_smb2_config()
+	private int __init_smb2_config()
 	{
 		try {
 			this.client = new SMBClient();
+
+			System.out.println("Init SMB2");
 		} catch (Exception e) {
 			e.printStackTrace();
 			return -1;
@@ -75,7 +83,7 @@ class SMBTEST {
 		return 0;
 	}
 
-	public int __init_smb302_config()
+	private int __init_smb302_config()
 	{
 		try {
 			EnumSet<SMB2GlobalCapability> set = EnumSet.of(SMB2GlobalCapability.SMB2_GLOBAL_CAP_LARGE_MTU);
@@ -91,6 +99,7 @@ class SMBTEST {
 				.build();
 
 			this.client = new SMBClient(config);
+			System.out.println("Init SMB3.02");
 		} catch (Exception e) {
 			e.printStackTrace();
 			return -1;
@@ -98,7 +107,7 @@ class SMBTEST {
 		return 0;
 	}
 
-	public int __init_smb311_config()
+	private int __init_smb311_config()
 	{
 		try {
 			Provider[] providerList = java.security.Security.getProviders();
@@ -116,6 +125,7 @@ class SMBTEST {
 				.build();
 
 			this.client = new SMBClient(config);
+			System.out.println("Init SMB3.11");
 		} catch (Exception e) {
 			e.printStackTrace();
 			return -1;
@@ -123,12 +133,26 @@ class SMBTEST {
 		return 0;
 	}
 
-	public int __login()
+	public int init_connection()
+	{
+		if (opts.get(SMB_VERS).equals("2"))
+			return __init_smb2_config();
+		if (opts.get(SMB_VERS).equals("3.02"))
+			return __init_smb302_config();
+		if (opts.get(SMB_VERS).equals("3.11"))
+			return __init_smb311_config();
+
+		System.out.println("Unsupported SMB_VERS");
+		return -1;
+	}
+
+	public int login()
 	{
 		try {
-			this.connection = client.connect(SERVER_ADDRESS);
-			AuthenticationContext ac = new AuthenticationContext(USERNAME, PASSWORD.toCharArray(), DOMAIN);
-
+			this.connection = client.connect(opts.get(SERVER));
+			AuthenticationContext ac = new AuthenticationContext(opts.get(USER_NAME),
+									     opts.get(PASSWORD).toCharArray(),
+									     opts.get(DOMAIN));
 			this.session = connection.authenticate(ac);
 			System.out.println("Session created");
 
@@ -138,9 +162,10 @@ class SMBTEST {
 				System.out.println("Client Decide Encrypt: NO");
 
 			if (connection.getNegotiatedProtocol().getDialect().isSmb3x())
-				System.out.println("Session: SMB3");
+				System.out.println("Session type: SMB3");
 			else
 				System.out.println("Session: NOT SMB3");
+
 			if (connection.getConnectionInfo().isConnectionSupportEncrypt())
 				System.out.println("Session Encryption: supported");
 			else
@@ -156,7 +181,7 @@ class SMBTEST {
 		return 0;
 	}
 
-	public int __logoff()
+	public int logoff()
 	{
 		try {
 			this.session.logoff();
@@ -167,46 +192,48 @@ class SMBTEST {
 		return 0;
 	}
 
-	public int __read()
+	public int read_test()
 	{
 		try {
-			DiskShare share = (DiskShare) session.connectShare(SHARE_NAME);
+			if (!opts.containsKey(REMOTE_RFILE)) {
+				System.out.println("Skip read_test()");
+				return 0;
+			}
+
+			DiskShare share = (DiskShare) session.connectShare(opts.get(SHARE_NAME));
 			HashSet<SMB2ShareAccess> s = new HashSet<SMB2ShareAccess>();
 
 			System.out.printf("READ: Remote file //%s/%s/%s\n",
-					SERVER_ADDRESS,
-					SHARE_NAME,
-					REMOTE_RFILE_NAME);
+					opts.get(SERVER),
+					opts.get(SHARE_NAME),
+					opts.get(REMOTE_RFILE));
 
 			s.add(SMB2ShareAccess.ALL.iterator().next());
+
 			com.hierynomus.smbj.share.File remoteSmbjFile =
-				share.openFile(REMOTE_RFILE_NAME,
-						EnumSet.of(AccessMask.GENERIC_READ),
-						null,
-						SMB2ShareAccess.ALL,
-						SMB2CreateDisposition.FILE_OPEN,
-						null);
+					share.openFile(opts.get(REMOTE_RFILE),
+							EnumSet.of(AccessMask.GENERIC_READ),
+							null,
+							SMB2ShareAccess.ALL,
+							SMB2CreateDisposition.FILE_OPEN,
+							null);
 
-			System.out.printf("Local file %s%s\n",
-					LOCAL_PATH,
-					LOCAL_FILE_NAME);
+			System.out.printf("Local file %s\n", opts.get(LOCAL_RWFILE));
 
-			java.io.File dest = new
-				java.io.File(LOCAL_PATH + LOCAL_FILE_NAME);
-
+			java.io.File dest = new java.io.File(opts.get(LOCAL_RWFILE));
 			InputStream is = remoteSmbjFile.getInputStream();
 			FileOutputStream os = new FileOutputStream(dest);
 
-			byte[] buffer = new byte[1024];
-			int length;
+			int length = Integer.parseInt(opts.get(BUFFER_SIZE));
+			byte[] buffer = new byte[length];
 
-			while ((length = is.read(buffer)) > 0) {
-				System.out.printf("READ %d bytes\n",
-						length);
+			while ((length = is.read(buffer)) > 0)
 				os.write(buffer, 0, length);
-			}
+
 			is.close();
 			os.close();
+
+			System.out.println("read_test() done");
 		} catch (Exception e) {
 			e.printStackTrace();
 			return -1;
@@ -214,60 +241,65 @@ class SMBTEST {
 		return 0;
 	}
 
-	public int __write()
+	public int write_test()
 	{
 		try {
-			DiskShare share = (DiskShare) session.connectShare(SHARE_NAME);
+			if (!opts.containsKey(REMOTE_WFILE)) {
+				System.out.println("Skip write_test()");
+				return 0;
+			}
+
+			DiskShare share = (DiskShare) session.connectShare(opts.get(SHARE_NAME));
 			HashSet<SMB2ShareAccess> s = new HashSet<SMB2ShareAccess>();
 
 			System.out.printf("WRITE: Remote file //%s/%s/%s\n",
-					SERVER_ADDRESS,
-					SHARE_NAME,
-					REMOTE_WFILE_NAME);
+					opts.get(SERVER),
+					opts.get(SHARE_NAME),
+					opts.get(REMOTE_WFILE));
 
 			s.add(SMB2ShareAccess.ALL.iterator().next());
+
 			com.hierynomus.smbj.share.File remoteSmbjFile =
-				share.openFile(REMOTE_WFILE_NAME,
-						EnumSet.of(AccessMask.GENERIC_WRITE),
-						EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL),
-						EnumSet.of(SMB2ShareAccess.FILE_SHARE_WRITE),
-						SMB2CreateDisposition.FILE_OVERWRITE_IF,
-						null);
+					share.openFile(opts.get(REMOTE_WFILE),
+							EnumSet.of(AccessMask.GENERIC_WRITE),
+							EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL),
+							EnumSet.of(SMB2ShareAccess.FILE_SHARE_WRITE),
+							SMB2CreateDisposition.FILE_OVERWRITE_IF,
+							null);
 
-			System.out.printf("Local file %s%s\n",
-					LOCAL_PATH,
-					LOCAL_FILE_NAME);
+			System.out.printf("Local file %s\n", opts.get(LOCAL_RWFILE));
 
-			InputStream is = new java.io.FileInputStream(LOCAL_PATH + LOCAL_FILE_NAME);
+			InputStream is = new java.io.FileInputStream(opts.get(LOCAL_RWFILE));
 			remoteSmbjFile.write(new InputStreamByteChunkProvider(is));
 			remoteSmbjFile.flush();
 			remoteSmbjFile.close();
 			is.close();
+
+			System.out.println("write_test() done");
 		} catch (Exception e) {
 			e.printStackTrace();
 			return -1;
 		}
 		return 0;
 	}
-
 }
 
 public class App
 {
-	public static void main( String[] args )
+	public static void main(String[] args)
 	{
-		System.out.println( "Hello World!" );
+		SMBTEST st = new SMBTEST(args);
 
-		SMBTEST st = new SMBTEST();
+		if (st.init_connection() != 0)
+			return;
+		if (st.login() != 0)
+			return;
 
-		if (st.__init_smb311_config() != 0)
+		if (st.read_test() != 0)
 			return;
-		if (st.__login() != 0)
+		if (st.write_test() != 0)
 			return;
-		if (st.__read() != 0)
-			return;
-		if (st.__write() != 0)
-			return;
-		st.__logoff();
+
+		st.logoff();
 	}
 }
