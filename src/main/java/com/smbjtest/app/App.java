@@ -194,6 +194,8 @@ class SMBTEST {
 						length);
 				os.write(buffer, 0, length);
 			}
+			os.close();
+			is.close();
 		} catch (Exception e) {
 			e.printStackTrace();
 			return -1;
@@ -227,6 +229,9 @@ class SMBTEST {
 
 			InputStream is = new java.io.FileInputStream(LOCAL_PATH + LOCAL_FILE_NAME);
 			remoteSmbjFile.write(new InputStreamByteChunkProvider(is));
+			remoteSmbjFile.flush();
+			remoteSmbjFile.close();
+			is.close();
 		} catch (Exception e) {
 			e.printStackTrace();
 			return -1;
