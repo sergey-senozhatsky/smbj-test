@@ -15,6 +15,8 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.time.Instant;
+import java.time.Duration;
 import java.security.Provider;
 import com.hierynomus.smbj.SmbConfig;
 import com.hierynomus.smbj.SMBClient;
@@ -210,7 +212,7 @@ class SMBTEST {
 
 			s.add(SMB2ShareAccess.ALL.iterator().next());
 
-			com.hierynomus.smbj.share.File remoteSmbjFile =
+			com.hierynomus.smbj.share.File remote =
 					share.openFile(opts.get(REMOTE_RFILE),
 							EnumSet.of(AccessMask.GENERIC_READ),
 							null,
@@ -220,20 +222,33 @@ class SMBTEST {
 
 			System.out.printf("Local file %s\n", opts.get(LOCAL_RWFILE));
 
-			java.io.File dest = new java.io.File(opts.get(LOCAL_RWFILE));
-			InputStream is = remoteSmbjFile.getInputStream();
-			FileOutputStream os = new FileOutputStream(dest);
+			java.io.File local = new java.io.File(opts.get(LOCAL_RWFILE));
+			InputStream is = remote.getInputStream();
+			FileOutputStream os = new FileOutputStream(local);
 
 			int length = Integer.parseInt(opts.get(BUFFER_SIZE));
 			byte[] buffer = new byte[length];
 
-			while ((length = is.read(buffer)) > 0)
+			long total_bytes = 0;
+			Duration total_est = Duration.ZERO;
+
+			while (true) {
+				Instant st = Instant.now();
+				length = is.read(buffer);
+				if (length <= 0)
+					break;
+				Instant en = Instant.now();
+				total_est = total_est.plus(Duration.between(st, en));
+				total_bytes += length;
+
 				os.write(buffer, 0, length);
+			}
 
 			is.close();
 			os.close();
 
-			System.out.println("read_test() done");
+			System.out.println("read_test(): " + total_bytes +
+					   " bytes, elapsed " + total_est);
 		} catch (Exception e) {
 			e.printStackTrace();
 			return -1;
@@ -259,7 +274,7 @@ class SMBTEST {
 
 			s.add(SMB2ShareAccess.ALL.iterator().next());
 
-			com.hierynomus.smbj.share.File remoteSmbjFile =
+			com.hierynomus.smbj.share.File remote =
 					share.openFile(opts.get(REMOTE_WFILE),
 							EnumSet.of(AccessMask.GENERIC_WRITE),
 							EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL),
@@ -269,11 +284,38 @@ class SMBTEST {
 
 			System.out.printf("Local file %s\n", opts.get(LOCAL_RWFILE));
 
-			InputStream is = new java.io.FileInputStream(opts.get(LOCAL_RWFILE));
-			remoteSmbjFile.write(new InputStreamByteChunkProvider(is));
-			remoteSmbjFile.flush();
-			remoteSmbjFile.close();
-			is.close();
+			InputStream local = new java.io.FileInputStream(opts.get(LOCAL_RWFILE));
+			int length = Integer.parseInt(opts.get(BUFFER_SIZE));
+			byte[] buffer = new byte[length];
+			long total_bytes = 0;
+			int offt = 0;
+			Duration total_est = Duration.ZERO;
+			int avail = local.available();
+
+			while (avail > 0) {
+				length = local.read(buffer);
+				if (length <= 0)
+					break;
+
+				if (avail < length) {
+					length = avail;
+					avail = 0;
+				}
+
+				avail -= length;
+				total_bytes += length;
+				Instant st = Instant.now();
+				offt += remote.write(buffer, offt, 0, length);
+				Instant en = Instant.now();
+				total_est = total_est.plus(Duration.between(st, en));
+			}
+
+			System.out.println("write_test(): " + total_bytes +
+					   " bytes, elapsed " + total_est);
+
+			remote.flush();
+			remote.close();
+			local.close();
 
 			System.out.println("write_test() done");
 		} catch (Exception e) {
