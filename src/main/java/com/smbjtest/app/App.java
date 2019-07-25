@@ -50,6 +50,8 @@ class SMBTEST {
 	static final String LOCAL_RWFILE	= "LOCAL_RWFILE";
 	static final String SMB_VERS		= "SMB_VERS";
 	static final String BUFFER_SIZE		= "BUFFER_SIZE";
+	static final String SIGNING		= "SIGNING";
+	static final String ENCRYPTION		= "ENCRYPTION";
 
 	static Connection connection;
 	static SMBClient client;
@@ -88,17 +90,30 @@ class SMBTEST {
 	private int __init_smb302_config()
 	{
 		try {
-			EnumSet<SMB2GlobalCapability> set = EnumSet.of(SMB2GlobalCapability.SMB2_GLOBAL_CAP_LARGE_MTU);
+			boolean sign = false;
+			boolean encrypt = false;
 
-			set.add(SMB2GlobalCapability.SMB2_GLOBAL_CAP_DFS);
-			set.add(SMB2GlobalCapability.SMB2_GLOBAL_CAP_ENCRYPTION);
+			if (opts.containsKey(SIGNING) && opts.get(SIGNING).equals("yes"))
+				sign = true;
+			if (opts.containsKey(ENCRYPTION) && opts.get(ENCRYPTION).equals("yes")) {
+				encrypt = true;
+				sign = false;
+			}
+
+			if (encrypt) {
+				EnumSet<SMB2GlobalCapability> set = EnumSet.of(SMB2GlobalCapability.SMB2_GLOBAL_CAP_LARGE_MTU);
+
+				set.add(SMB2GlobalCapability.SMB2_GLOBAL_CAP_DFS);
+				set.add(SMB2GlobalCapability.SMB2_GLOBAL_CAP_ENCRYPTION);
+			}
 
 			SmbConfig config = SmbConfig.builder()
-				.withDialects(SMB2Dialect.SMB_3_0_2)
-				.withSecurityProvider(new BCSecurityProvider())
-				.withEncryptData(true)
-				.withDfsEnabled(true)
-				.build();
+					.withDialects(SMB2Dialect.SMB_3_0_2)
+					.withSecurityProvider(new BCSecurityProvider())
+					.withEncryptData(encrypt)
+					.withDfsEnabled(encrypt)
+					.withSigningRequired(sign)
+					.build();
 
 			this.client = new SMBClient(config);
 			System.out.println("Init SMB3.02");
@@ -112,18 +127,31 @@ class SMBTEST {
 	private int __init_smb311_config()
 	{
 		try {
-			Provider[] providerList = java.security.Security.getProviders();
-			BouncyCastleProvider bcSecurityProvider = new BouncyCastleProvider();
-			java.security.Security.insertProviderAt(bcSecurityProvider, providerList.length);
-			EnumSet<SMB2GlobalCapability> set = EnumSet.of(SMB2GlobalCapability.SMB2_GLOBAL_CAP_LARGE_MTU);
+			boolean sign = false;
+			boolean encrypt = false;
 
-			set.add(SMB2GlobalCapability.SMB2_GLOBAL_CAP_DFS);
-			set.add(SMB2GlobalCapability.SMB2_GLOBAL_CAP_ENCRYPTION);
+			if (opts.containsKey(SIGNING) && opts.get(SIGNING).equals("yes"))
+				sign = true;
+			if (opts.containsKey(ENCRYPTION) && opts.get(ENCRYPTION).equals("yes")) {
+				encrypt = true;
+				sign = false;
+			}
+
+			if (encrypt) {
+				Provider[] providerList = java.security.Security.getProviders();
+				BouncyCastleProvider bcSecurityProvider = new BouncyCastleProvider();
+				java.security.Security.insertProviderAt(bcSecurityProvider, providerList.length);
+				EnumSet<SMB2GlobalCapability> set = EnumSet.of(SMB2GlobalCapability.SMB2_GLOBAL_CAP_LARGE_MTU);
+
+				set.add(SMB2GlobalCapability.SMB2_GLOBAL_CAP_DFS);
+				set.add(SMB2GlobalCapability.SMB2_GLOBAL_CAP_ENCRYPTION);
+			}
 
 			SmbConfig config = SmbConfig.builder()
 				.withDialects(SMB2Dialect.SMB_3_1_1)
-				.withDfsEnabled(true)
-				.withEncryptData(true)
+				.withDfsEnabled(encrypt)
+				.withEncryptData(encrypt)
+				.withSigningRequired(sign)
 				.build();
 
 			this.client = new SMBClient(config);
@@ -172,6 +200,21 @@ class SMBTEST {
 				System.out.println("Session Encryption: supported");
 			else
 				System.out.println("Session Encryption: NOT supported");
+
+			if (session.isSigningRequired())
+				System.out.println("Session Signing: required");
+			else
+				System.out.println("Session Signing: NOT required");
+
+			if (session.isGuest())
+				System.out.println("Session Guest: yes");
+			else
+				System.out.println("Session Guest: no");
+
+			if (session.isAnonymous())
+				System.out.println("Session Anonymous: yes");
+			else
+				System.out.println("Session Anonymous: no");
 
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -249,6 +292,7 @@ class SMBTEST {
 
 			System.out.println("read_test(): " + total_bytes +
 					   " bytes, elapsed " + total_est);
+			System.out.println("read_test() done");
 		} catch (Exception e) {
 			e.printStackTrace();
 			return -1;
