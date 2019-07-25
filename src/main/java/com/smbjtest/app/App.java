@@ -337,10 +337,8 @@ public class App
 		if (st.login() != 0)
 			return;
 
-		if (st.read_test() != 0)
-			return;
-		if (st.write_test() != 0)
-			return;
+		if (st.read_test() == 0)
+			st.write_test();
 
 		st.logoff();
 	}
