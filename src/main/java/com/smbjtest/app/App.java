@@ -100,15 +100,10 @@ class SMBTEST {
 	private int __init_smb302_config()
 	{
 		try {
-			boolean sign = false;
 			boolean encrypt = false;
 
-			if (opts.containsKey(SIGNING) && opts.get(SIGNING).equals("yes"))
-				sign = true;
-			if (opts.containsKey(ENCRYPTION) && opts.get(ENCRYPTION).equals("yes")) {
+			if (opts.containsKey(ENCRYPTION) && opts.get(ENCRYPTION).equals("yes"))
 				encrypt = true;
-				sign = false;
-			}
 
 			if (encrypt) {
 				EnumSet<SMB2GlobalCapability> set = EnumSet.of(SMB2GlobalCapability.SMB2_GLOBAL_CAP_LARGE_MTU);
@@ -122,7 +117,6 @@ class SMBTEST {
 					.withSecurityProvider(new BCSecurityProvider())
 					.withEncryptData(encrypt)
 					.withDfsEnabled(encrypt)
-					.withSigningRequired(sign)
 					.build();
 
 			this.client = new SMBClient(config);
@@ -137,15 +131,10 @@ class SMBTEST {
 	private int __init_smb311_config()
 	{
 		try {
-			boolean sign = false;
 			boolean encrypt = false;
 
-			if (opts.containsKey(SIGNING) && opts.get(SIGNING).equals("yes"))
-				sign = true;
-			if (opts.containsKey(ENCRYPTION) && opts.get(ENCRYPTION).equals("yes")) {
+			if (opts.containsKey(ENCRYPTION) && opts.get(ENCRYPTION).equals("yes"))
 				encrypt = true;
-				sign = false;
-			}
 
 			if (encrypt) {
 				Provider[] providerList = java.security.Security.getProviders();
@@ -161,7 +150,6 @@ class SMBTEST {
 				.withDialects(SMB2Dialect.SMB_3_1_1)
 				.withDfsEnabled(encrypt)
 				.withEncryptData(encrypt)
-				.withSigningRequired(sign)
 				.build();
 
 			this.client = new SMBClient(config);
