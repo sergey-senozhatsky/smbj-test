@@ -74,11 +74,21 @@ class SMBTEST {
 		}
 	}
 
-	private int __init_smb2_config()
+	private int __init_smb21_config()
 	{
 		try {
 			this.client = new SMBClient();
+			boolean sign = false;
 
+			if (opts.containsKey(SIGNING) && opts.get(SIGNING).equals("yes"))
+				sign = true;
+
+			SmbConfig config = SmbConfig.builder()
+					.withDialects(SMB2Dialect.SMB_2_1)
+					.withSigningRequired(sign)
+					.build();
+
+			this.client = new SMBClient(config);
 			System.out.println("Init SMB2");
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -165,8 +175,8 @@ class SMBTEST {
 
 	public int init_connection()
 	{
-		if (opts.get(SMB_VERS).equals("2"))
-			return __init_smb2_config();
+		if (opts.get(SMB_VERS).equals("2.1"))
+			return __init_smb21_config();
 		if (opts.get(SMB_VERS).equals("3.02"))
 			return __init_smb302_config();
 		if (opts.get(SMB_VERS).equals("3.11"))
@@ -215,6 +225,11 @@ class SMBTEST {
 				System.out.println("Session Anonymous: yes");
 			else
 				System.out.println("Session Anonymous: no");
+
+			if (connection.getConnectionInfo().isServerRequiresSigning())
+				System.out.println("Server Required Signing: yes");
+			else
+				System.out.println("Server Require Signing: no");
 
 		} catch (IOException e) {
 			e.printStackTrace();
